@@ -225,6 +225,12 @@ struct rarch_main_wrap
    int argc;
 };
 
+typedef struct size_info
+{
+   unsigned width;
+   unsigned height;
+} size_info_t;
+
 typedef struct rarch_resolution
 {
    unsigned idx;

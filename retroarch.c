@@ -21215,6 +21215,26 @@ bool video_driver_get_viewport_info(struct video_viewport *viewport)
    return true;
 }
 
+static size_info_t get_int_scaled_viewport_base_size(const unsigned base_width,
+      const unsigned base_height, const float aspect_ratio)
+{
+   size_info_t scaled_size;
+
+   if (retroarch_get_rotation() % 2)
+      scaled_size.height = base_width;
+   else
+      scaled_size.height = base_height;
+
+   if (scaled_size.height == 0)
+      scaled_size.height = 1;
+
+   /* Account for non-square pixels.
+    * This is sort of contradictory with the goal of integer scaling, but is
+    * needed when the viewport needs aspect ratio correction. */
+   scaled_size.width = (unsigned)roundf(scaled_size.height * aspect_ratio);
+   return scaled_size;
+}
+
 /**
  * video_viewport_get_scaled_integer:
  * @vp            : Viewport handle
@@ -21248,43 +21268,55 @@ void video_viewport_get_scaled_integer(struct video_viewport *vp,
    }
    else
    {
-      unsigned base_width;
       /* Use system reported sizes as these define the
        * geometry for the "normal" case. */
-      unsigned base_height;
-      
-      if (retroarch_get_rotation() % 2)
-         base_height = video_driver_av_info.geometry.base_width;
+      size_info_t base_size;
+
+      if (false)
+      {
+         base_size = get_int_scaled_viewport_base_size(
+               video_driver_av_info.geometry.base_width,
+               video_driver_av_info.geometry.base_height, aspect_ratio);
+      }
       else
-         base_height = video_driver_av_info.geometry.base_height;
+      {
+         const size_info_t size_test_w = get_int_scaled_viewport_base_size(
+                  video_driver_av_info.geometry.base_width,
+                  video_driver_av_info.geometry.base_height, aspect_ratio);
+         const size_info_t size_test_h = get_int_scaled_viewport_base_size(
+                  video_driver_av_info.geometry.base_height,
+                  video_driver_av_info.geometry.base_width, 1.0f / aspect_ratio);
 
-      if (base_height == 0)
-         base_height = 1;
-
-      /* Account for non-square pixels.
-       * This is sort of contradictory with the goal of integer scale,
-       * but it is desirable in some cases.
-       *
-       * If square pixels are used, base_height will be equal to
-       * system->av_info.base_height. */
-      base_width = (unsigned)roundf(base_height * aspect_ratio);
+         if (size_test_h.width * size_test_h.height > size_test_w.width * size_test_w.height)
+         {
+            unsigned tmp;
+            base_size = size_test_h;
+            tmp = base_size.width;
+            base_size.width = base_size.height;
+            base_size.height = tmp;
+         }
+         else
+         {
+            base_size = size_test_w;
+         }
+      }
 
       /* Make sure that we don't get 0x scale ... */
-      if (width >= base_width && height >= base_height)
+      if (width >= base_size.width && height >= base_size.height)
       {
          if (keep_aspect)
          {
             /* X/Y scale must be same. */
-            unsigned max_scale = MIN(width / base_width,
-                  height / base_height);
-            padding_x          = width - base_width * max_scale;
-            padding_y          = height - base_height * max_scale;
+            unsigned max_scale = MIN(width / base_size.width,
+                  height / base_size.height);
+            padding_x          = width - base_size.width * max_scale;
+            padding_y          = height - base_size.height * max_scale;
          }
          else
          {
             /* X/Y can be independent, each scaled as much as possible. */
-            padding_x = width % base_width;
-            padding_y = height % base_height;
+            padding_x = width % base_size.width;
+            padding_y = height % base_size.height;
          }
       }
 
